@@ -48,6 +48,14 @@ export const ALARM = {
   decayDelay: 0.9,
   /** Crossing a live laser adds this much at once. */
   laserHit: 42,
+  /**
+   * The opening grace, in seconds: while the night is this young, the cameras pour at the
+   * calmer share below, so a first-time player can cross the first hall unseen while they
+   * are still learning the cones. A guard's eyes are never calmer, and neither is a laser.
+   */
+  openingSeconds: 20,
+  /** The share of the cameras' usual rate they pour during the opening grace. */
+  openingCameraScale: 0.5,
 };
 
 export const DISK = {

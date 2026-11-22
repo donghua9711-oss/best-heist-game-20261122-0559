@@ -13,6 +13,14 @@ export const GUARD_INVESTIGATE = 'investigate';
 export const GUARD_LOOK = 'look';
 export const GUARD_HUNT = 'hunt';
 
+export const MOOD_CALM = 'calm';
+export const MOOD_CURIOUS = 'curious';
+export const MOOD_SPOTTED = 'spotted';
+export const MOOD_HUNT = 'hunt';
+
+/** Sight at or above this is a guard sure of what it sees, not merely wondering. */
+const SPOTTED_SIGHT = 0.55;
+
 const TURN_RATE = 3.4;
 const ARRIVE = 8;
 
@@ -43,6 +51,22 @@ export function distractGuard(guard, point) {
   guard.mode = GUARD_INVESTIGATE;
   guard.focus = { x: point.x, y: point.y };
   guard.lostFor = 0;
+}
+
+/**
+ * What a guard's face says, for the renderer's bubble above its head: hunting once the
+ * hunt is on, spotted while its view of the thief is strong, curious while it stares,
+ * investigates or scans (or catches only a faint glimpse), and calm on patrol. A staring
+ * guard is curious, not yet certain — a glimpse is a question, not an answer.
+ */
+export function guardMood(guard) {
+  if (guard.mode === GUARD_HUNT) return MOOD_HUNT;
+  if (guard.sight >= SPOTTED_SIGHT) return MOOD_SPOTTED;
+  if (guard.mode === GUARD_SUSPICIOUS || guard.mode === GUARD_INVESTIGATE || guard.mode === GUARD_LOOK) {
+    return MOOD_CURIOUS;
+  }
+  if (guard.sight > 0) return MOOD_CURIOUS;
+  return MOOD_CALM;
 }
 
 /**

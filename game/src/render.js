@@ -1,8 +1,11 @@
 // Everything the player sees: the gallery floor and its furniture, the sweep of cones, the
-// actors, the HUD with its alarm meter, and the title, pause and ending screens. Canvas 2D,
-// drawn in field coordinates (1280x720); the page scales the canvas, never the art.
+// actors, the night's current goal marked with a pulsing ring and arrow so one glance at
+// one frame finds it, the HUD with its alarm meter, and the title, pause and ending
+// screens. Canvas 2D, drawn in field coordinates (1280x720); the page scales the canvas,
+// never the art.
 
 import { ALARM, FIELD, FONT_DISPLAY, FONT_UI, HUD_HEIGHT, PALETTE, VISION } from './config.js';
+import { guardMood, MOOD_CALM, MOOD_HUNT, MOOD_SPOTTED } from './guards.js';
 import { PHASE_CAUGHT, PHASE_WON } from './world.js';
 
 export const SCREEN_TITLE = 'title';
@@ -391,22 +394,34 @@ export function createRenderer(canvas) {
     ctx.arc(guard.x + Math.cos(guard.facing) * 6, guard.y + Math.sin(guard.facing) * 6, 3, 0, Math.PI * 2);
     ctx.fillStyle = '#f6d8a8';
     ctx.fill();
-    // What the guard is thinking, in the oldest notation there is.
-    let mark = null;
-    if (guard.mode === 'hunt') mark = '!';
-    else if (guard.sight > 0) mark = '!';
-    else if (guard.mode === 'investigate' || guard.mode === 'look') mark = '?';
-    if (mark) {
+    // What the guard is thinking, in the oldest notation there is: a bubble floating
+    // above its head — an amber '?' while it is only curious (staring, investigating,
+    // scanning), a red '!' once it is sure of the thief or the hunt is on.
+    const mood = guardMood(guard);
+    if (mood !== MOOD_CALM) {
+      const sure = mood === MOOD_SPOTTED || mood === MOOD_HUNT;
       const bob = Math.sin(t * 6) * 1.6;
+      const bx = guard.x;
+      const by = guard.y - guard.radius - 13 + bob;
+      if (mood === MOOD_HUNT) {
+        ctx.beginPath();
+        ctx.arc(bx, by, 11.5 + Math.sin(t * 10) * 1.5, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 83, 71, 0.65)';
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+      }
       ctx.beginPath();
-      ctx.arc(guard.x + 13, guard.y - 19 + bob, 9, 0, Math.PI * 2);
-      ctx.fillStyle = mark === '!' ? '#ff5347' : '#ffd94d';
+      ctx.arc(bx, by, 9, 0, Math.PI * 2);
+      ctx.fillStyle = sure ? '#ff5347' : '#ffd94d';
       ctx.fill();
+      ctx.strokeStyle = 'rgba(10, 8, 4, 0.55)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
       ctx.fillStyle = '#14100a';
       ctx.font = `bold 13px ${FONT_UI}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(mark, guard.x + 13, guard.y - 18.5 + bob);
+      ctx.fillText(sure ? '!' : '?', bx, by + 0.5);
     }
   }
 
@@ -443,6 +458,69 @@ export function createRenderer(canvas) {
         ctx.fill();
       }
     }
+  }
+
+  /**
+   * The night's current goal, marked so a single glance at a single frame finds it: a
+   * pulsing outline around the target and a labelled arrow bobbing above it — gold over
+   * the Sun Disk while it waits on its pedestal, green over the service door once the
+   * Disk is in the bag and the door is the goal.
+   */
+  function drawObjectiveMarker(world) {
+    const t = world.time;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 3.4);
+    let x;
+    let y;
+    let label;
+    if (world.hasDisk) {
+      const exit = world.level.exit;
+      x = exit.x + exit.w / 2;
+      y = exit.y + exit.h / 2;
+      label = 'EXIT';
+      const grow = pulse * 3;
+      ctx.strokeStyle = `rgba(67, 209, 124, ${0.55 + 0.35 * pulse})`;
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(exit.x - 3 - grow, exit.y - 3 - grow, exit.w + 6 + grow * 2, exit.h + 6 + grow * 2);
+    } else {
+      const disk = world.level.disk;
+      x = disk.x;
+      y = disk.y;
+      label = 'SUN DISK';
+      for (const ring of [0, 1]) {
+        ctx.beginPath();
+        ctx.arc(x, y, 31 + ring * 9 + pulse * 5, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 217, 77, ${ring === 0 ? 0.85 : 0.38})`;
+        ctx.lineWidth = ring === 0 ? 2.6 : 1.6;
+        ctx.stroke();
+      }
+    }
+    // The arrow: a chevron bobbing above the mark, pointing down at the goal, its name
+    // lettered over it on a dark stroke so it survives being shrunk to a thumbnail. A
+    // soft dark halo sits behind both, so the mark reads even over a lit carpet or a
+    // bright cone where gold on gold would vanish.
+    const tipY = y - 54 - Math.sin(t * 3.4) * 5;
+    ctx.beginPath();
+    ctx.ellipse(x, tipY - 17, 42, 25, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(7, 10, 20, 0.48)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x - 11, tipY - 12);
+    ctx.lineTo(x + 11, tipY - 12);
+    ctx.lineTo(x, tipY);
+    ctx.closePath();
+    ctx.fillStyle = world.hasDisk ? '#43d17c' : PALETTE.loot;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(10, 8, 4, 0.6)';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    ctx.font = `bold 12.5px ${FONT_UI}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = 'rgba(7, 10, 20, 0.85)';
+    ctx.strokeText(label, x, tipY - 24);
+    ctx.fillStyle = world.hasDisk ? '#b8ffd2' : '#ffe98a';
+    ctx.fillText(label, x, tipY - 24);
   }
 
   function drawHud(world, best) {
@@ -619,6 +697,7 @@ export function createRenderer(canvas) {
       drawThief(world);
       for (const guard of world.guards) drawGuard(guard, world.time);
       for (const camera of world.cameras) drawCamera(camera);
+      drawObjectiveMarker(world);
       // What the night just paid out, drifting up off the cases.
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
